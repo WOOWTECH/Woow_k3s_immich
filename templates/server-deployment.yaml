@@ -1,8 +1,9 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: immich-server
-  namespace: immich
+  namespace: {{ .Values.namespace.name }}
   labels:
     app: immich
     component: server
@@ -22,7 +23,8 @@ spec:
     spec:
       containers:
         - name: immich-server
-          image: ghcr.io/immich-app/immich-server:release
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
           ports:
             - containerPort: 2283
               protocol: TCP
@@ -62,12 +64,7 @@ spec:
               mountPath: /etc/localtime
               readOnly: true
           resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: "2"
-              memory: 2Gi
+            {{- toYaml .Values.server.resources | nindent 12 }}
       volumes:
         - name: upload-data
           persistentVolumeClaim:

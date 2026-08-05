@@ -1,8 +1,10 @@
+{{- if .Values.machineLearning.enabled }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: immich-machine-learning
-  namespace: immich
+  namespace: {{ .Values.namespace.name }}
   labels:
     app: immich
     component: machine-learning
@@ -22,7 +24,8 @@ spec:
     spec:
       containers:
         - name: machine-learning
-          image: ghcr.io/immich-app/immich-machine-learning:release
+          image: "{{ .Values.machineLearning.image.repository }}:{{ .Values.machineLearning.image.tag }}"
+          imagePullPolicy: {{ .Values.machineLearning.image.pullPolicy }}
           ports:
             - containerPort: 3003
               protocol: TCP
@@ -59,13 +62,9 @@ spec:
             - name: model-cache
               mountPath: /cache
           resources:
-            requests:
-              cpu: 500m
-              memory: 1Gi
-            limits:
-              cpu: "4"
-              memory: 4Gi
+            {{- toYaml .Values.machineLearning.resources | nindent 12 }}
       volumes:
         - name: model-cache
           persistentVolumeClaim:
             claimName: immich-model-cache
+{{- end }}

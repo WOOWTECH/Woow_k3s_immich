@@ -1,0 +1,52 @@
+---
+# PVC for the PostgreSQL data directory (pgvecto.rs)
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-postgres-data
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.postgres.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistence.size }}
+{{- end }}
+---
+# PVC for the Immich upload/library directory
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-upload-data
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.server.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.server.persistence.size }}
+{{- if .Values.machineLearning.enabled }}
+---
+# PVC for the machine-learning model cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-model-cache
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.machineLearning.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.machineLearning.persistence.size }}
+{{- end }}

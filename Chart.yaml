@@ -1,0 +1,23 @@
+apiVersion: v2
+name: immich
+description: >-
+  Immich self-hosted photo and video management on K3s/Kubernetes.
+  Deploys the immich-server, machine-learning worker, Redis, and a
+  pgvecto.rs PostgreSQL StatefulSet.
+type: application
+version: 1.0.0
+appVersion: "release"
+kubeVersion: ">=1.24.0-0"
+keywords:
+  - immich
+  - photos
+  - self-hosted
+  - google-photos
+home: https://github.com/WOOWTECH/Woow_k3s_immich
+sources:
+  - https://github.com/WOOWTECH/Woow_k3s_immich
+  - https://github.com/immich-app/immich
+  - https://github.com/tensorchord/pgvecto.rs
+maintainers:
+  - name: WoowTech
+    url: https://github.com/WOOWTECH

@@ -1,17 +1,20 @@
+{{- if .Values.machineLearning.enabled }}
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: immich-machine-learning
-  namespace: immich
+  namespace: {{ .Values.namespace.name }}
   labels:
     app: immich
     component: machine-learning
 spec:
-  type: ClusterIP
+  type: {{ .Values.machineLearning.service.type }}
   selector:
     app: immich
     component: machine-learning
   ports:
-    - port: 3003
+    - port: {{ .Values.machineLearning.service.port }}
       targetPort: 3003
       protocol: TCP
+{{- end }}

@@ -1,0 +1,131 @@
+# Default values for the immich chart.
+# Defaults reproduce the original Kustomize deployment 1:1
+# (namespace immich, NodePort 30283, local-path storage,
+# pgvecto.rs PostgreSQL + Redis).
+
+namespace:
+  # Create the target namespace as part of the release.
+  # Set to false if the namespace is managed elsewhere.
+  create: true
+  name: immich
+
+# ── Shared configuration shipped to every component via envFrom ────
+# Original ConfigMap keys (DB_HOSTNAME, REDIS_HOSTNAME, TZ).
+config:
+  DB_HOSTNAME: "immich-postgres"
+  REDIS_HOSTNAME: "immich-redis"
+  TZ: "Asia/Taipei"
+
+server:
+  image:
+    repository: ghcr.io/immich-app/immich-server
+    tag: release
+    # "Always" matches the original manifests' behaviour with the
+    # :release rolling tag (was implicit, now explicit).
+    pullPolicy: Always
+
+  service:
+    type: NodePort
+    port: 2283
+    # Only used when type is NodePort.
+    nodePort: 30283
+
+  persistence:
+    # PVC for the Immich upload/library directory.
+    storageClassName: local-path
+    size: 50Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+machineLearning:
+  # Deploy the machine-learning worker (face recognition, smart search,
+  # auto-tagging). Disable only if you host it elsewhere.
+  enabled: true
+
+  image:
+    repository: ghcr.io/immich-app/immich-machine-learning
+    tag: release
+    # "Always" matches the original manifests' behaviour with the
+    # :release rolling tag (was implicit, now explicit).
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 3003
+
+  persistence:
+    # PVC for the ML model cache (downloaded on first use).
+    storageClassName: local-path
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+postgres:
+  # In-cluster pgvecto.rs PostgreSQL StatefulSet.
+  # Disable to point Immich at an external database (update
+  # config.DB_HOSTNAME + secrets accordingly).
+  enabled: true
+
+  image:
+    repository: tensorchord/pgvecto-rs
+    tag: pg16-v0.3.0
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  persistence:
+    # PVC for the PostgreSQL data directory. Must be local disk —
+    # network storage (NFS/CIFS) risks database corruption.
+    storageClassName: local-path
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+redis:
+  # In-cluster Redis for Immich's job queue.
+  enabled: true
+
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 6379
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+secrets:
+  # -- PostgreSQL password (change before deploying)
+  dbPassword: "changeme-please"
+  # -- PostgreSQL username used by Immich
+  dbUsername: "immich"
+  # -- PostgreSQL database name used by Immich
+  dbDatabaseName: "immich"

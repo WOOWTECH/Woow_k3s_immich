@@ -1,8 +1,10 @@
+{{- if .Values.redis.enabled }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: immich-redis
-  namespace: immich
+  namespace: {{ .Values.namespace.name }}
   labels:
     app: immich
     component: redis
@@ -22,7 +24,8 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           ports:
             - containerPort: 6379
               protocol: TCP
@@ -45,9 +48,5 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+{{- end }}
