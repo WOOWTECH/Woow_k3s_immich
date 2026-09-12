@@ -1,0 +1,96 @@
+{{- /*
+`helm test` smoke pod, read-only:
+  1. immich-server /api/server/ping returns 200 (initContainer).
+  2. If postgres.enabled: the database Immich actually uses has a schema -
+     at least one table in the public schema, and a "migrations" table
+     (TypeORM's tracking table, present once migrations have run).
+Uses curlimages/curl for the HTTP check and the chart's own postgres image
+(it already ships psql) for the DB check - no new production image.
+*/ -}}
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-smoke
+  namespace: {{ include "immich.ns" . }}
+  labels:
+    app: immich
+    component: smoke-test
+  annotations:
+    helm.sh/hook: test
+    # Kept until the next `helm test` so `helm test --logs` can always read it.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: server-ping
+      image: curlimages/curl:8.11.1
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -eu
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "http://immich-server.{{ include "immich.ns" . }}.svc.cluster.local:{{ .Values.server.service.port }}/api/server/ping")
+          [ "$code" = "200" ] || { echo "server ping: unexpected status $code"; exit 1; }
+          echo "server ping OK (200)"
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 250m
+          memory: 64Mi
+  containers:
+{{- if .Values.postgres.enabled }}
+    - name: db-schema
+      image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -eu
+          host="immich-postgres.{{ include "immich.ns" . }}.svc.cluster.local"
+          n=$(psql -tA -h "$host" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+          echo "public tables: $n"
+          [ "$n" -gt 0 ] || { echo "no tables in public schema - schema missing"; exit 1; }
+          m=$(psql -tA -h "$host" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='migrations';")
+          [ "$m" -gt 0 ] || { echo "migrations table missing - Immich has not initialised the schema"; exit 1; }
+          echo "migrations table present"
+          echo "SMOKE OK"
+      env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-db-secret
+              key: DB_PASSWORD
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: immich-db-secret
+              key: DB_USERNAME
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: immich-db-secret
+              key: DB_DATABASE_NAME
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 250m
+          memory: 64Mi
+{{- else }}
+    - name: db-schema-skipped
+      image: curlimages/curl:8.11.1
+      command: ["sh", "-c", "echo 'postgres.enabled=false: skipping in-cluster DB schema check'"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+{{- end }}
+{{- end }}
