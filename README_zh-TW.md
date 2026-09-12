@@ -27,22 +27,37 @@
 
 ## 快速開始
 
+預設(`secrets.create: false`)chart 不會渲染資料庫 Secret,只會用名稱
+`immich-db-secret` 去參照既有的 Secret,這樣 `helm upgrade` 就永遠不會用空值
+蓋掉真正的密碼。請先離線建立一次,來源是
+[`examples/secrets.example.yaml`](examples/secrets.example.yaml):
+
+```bash
+kubectl create namespace immich
+cp examples/secrets.example.yaml /secure/path/secrets.yaml   # 放在倉庫外
+# 編輯這份複本裡的 DB_PASSWORD,然後:
+kubectl apply -f /secure/path/secrets.yaml
+```
+
+接著安裝:
+
 ```bash
 # 直接以倉庫 tarball 安裝(免 clone)
-helm install immich https://github.com/WOOWTECH/Woow_k3s_immich/archive/refs/heads/main.tar.gz
+helm install immich https://github.com/WOOWTECH/Woow_k3s_immich/archive/refs/heads/main.tar.gz -n immich
 
 # 或 clone 後安裝
 git clone https://github.com/WOOWTECH/Woow_k3s_immich.git
 cd Woow_k3s_immich
-helm install immich .
+helm install immich . -n immich
 ```
 
-> **非測試環境部署前務必更換資料庫密碼:**
->
-> ```bash
-> helm install immich . \
->   --set secrets.dbPassword="$(openssl rand -base64 24)"
-> ```
+若只是要用完即丟的測試安裝,可以改讓 chart 直接渲染 Secret:
+
+```bash
+helm install immich . -n immich \
+  --set secrets.create=true \
+  --set secrets.dbPassword="$(openssl rand -base64 24)"
+```
 
 完成後開啟 `http://<node-ip>:30283`,並完成 Immich 首次設定精靈。
 
@@ -60,7 +75,10 @@ helm install immich .
 | `postgres.enabled` | `true` | 是否部署 in-cluster PostgreSQL StatefulSet |
 | `postgres.persistence.size` | `10Gi` | 資料庫 PVC(**限本機磁碟**) |
 | `redis.enabled` | `true` | 是否部署 in-cluster Redis |
-| `secrets.dbPassword` | `changeme-please` | PostgreSQL 密碼 |
+| `keepOnUninstall` | `true` | 為 Namespace、PVC、Secret 加上 `helm.sh/resource-policy: keep` |
+| `secrets.create` | `false` | 由 `secrets.*` 渲染 `immich-db-secret`,而非參照既有 Secret |
+| `secrets.dbPassword` | `""` | PostgreSQL 密碼 —— `secrets.create=true` 時**必填**(否則 render 失敗);此檔案中永遠不要放真實密碼 |
+| `tests.enabled` | `true` | 是否渲染 `helm test` smoke pod |
 
 完整清單:[`values.yaml`](values.yaml)
 
@@ -69,28 +87,55 @@ helm install immich .
 ```bash
 kubectl get pods -n immich          # 四個 pod 均 Running/Ready
 curl http://<node-ip>:30283/api/server/ping
+helm test immich -n immich          # 唯讀 smoke pod:ping + 資料庫 schema 檢查
 ```
 
 ## 移除
 
+預設(`keepOnUninstall: true`)Namespace、三個 PVC,以及 Secret(當
+`secrets.create=true` 時)都帶有 `helm.sh/resource-policy: keep`,所以
+
 ```bash
-helm uninstall immich
-# Helm 會保留 PVC;確定不要資料後再刪:
-kubectl delete pvc -n immich immich-postgres-data immich-upload-data immich-model-cache
+helm uninstall immich -n immich
 ```
+
+會保留相片、資料庫和模型快取 —— 用 `kubectl get pvc,secret,ns immich` 確認。
+真的要全部刪除:
+
+```bash
+kubectl delete pvc -n immich immich-postgres-data immich-upload-data immich-model-cache
+kubectl delete secret -n immich immich-db-secret   # 僅在曾用 secrets.create=true 時需要
+kubectl delete namespace immich
+```
+
+keep policy 是在 install/upgrade 時寫進實際物件的,不是在 uninstall 當下讀取
+——若要退出(例如用完即丟的測試安裝),請在 `helm install`/`helm upgrade`
+時就加上 `--set keepOnUninstall=false`,不要等到要 uninstall 才設定。
 
 ## 從舊 Kustomize 部署遷移
 
 本倉庫取代已封存的
 [Woow_immich_docker_compose_all](https://github.com/WOOWTECH/Woow_immich_docker_compose_all)
 `k3s` 分支。Chart 預設渲染結果與原 manifests 資源等價(名稱、namespace、標籤、
-埠、PVC、kind 皆相同 —— postgres 維持 StatefulSet),既有部署可交由 Helm 接管
-或維持原狀;原始 Kustomize 檔案保留在本倉庫的 git 歷史中。
+埠、PVC、kind 皆相同 —— postgres 維持 StatefulSet),既有部署可以維持原狀;
+原始 Kustomize 檔案保留在本倉庫的 git 歷史中。
 
-Chart 與原 manifests 唯二的蓄意差異:
+Chart 與原 manifests 的蓄意差異:
 
-- `imagePullPolicy` 明寫(`:release` → `Always`、固定 tag → `IfNotPresent`,與 K8s 隱性預設一致)
-- Namespace 多帶 `managed-by: helm` 標籤
+- Namespace、三個 PVC,以及 Secret(有渲染時)都帶
+  `helm.sh/resource-policy: keep` —— 見上方「移除」。
+- 資料庫密碼不再寫死在 `values.yaml`;預設改為參照既有 Secret,而非由 chart
+  渲染 —— 見上方「快速開始」。
+- Namespace 多帶 `managed-by: helm` 標籤。
+- `imagePullPolicy` 明寫:server、machine-learning 兩個 Deployment(tag
+  `:release`)是 `Always`;postgres、redis(固定 tag)是 `IfNotPresent`。
+  **這會改變實際拉取行為,不只是把隱性預設寫出來:** K8s 對非 `:latest`/
+  無 tag 的隱性預設一律是 `IfNotPresent`,`:release` 也不例外。我們找到的
+  兩套 `kubectl apply` 部署(都沒有 Helm ownership metadata,`helm install`
+  無法直接接管)實測都是 `IfNotPresent`。如果之後真的要用這個 chart 接管
+  live 部署,請先把 `server.image.pullPolicy` 和
+  `machineLearning.image.pullPolicy` 覆寫成 `IfNotPresent`,否則下一次 Pod
+  重啟就會直接跳到 `:release` 當下指到的版本。
 
 ## 授權
 

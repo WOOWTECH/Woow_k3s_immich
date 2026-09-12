@@ -64,6 +64,13 @@ spec:
                   key: DB_DATABASE_NAME
             - name: POSTGRES_INITDB_ARGS
               value: "--data-checksums"
+            # A dynamically-provisioned PVC can already contain a top-level
+            # lost+found directory (longhorn, some CSI drivers do this), and
+            # initdb refuses to initialise a non-empty directory. Using a
+            # subdirectory of the mount as PGDATA avoids that unconditionally
+            # (harmless on local-path too), per the postgres image's own docs.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data

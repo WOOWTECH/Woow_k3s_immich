@@ -6,8 +6,15 @@
 namespace:
   # Create the target namespace as part of the release.
   # Set to false if the namespace is managed elsewhere.
+  # A namespace equal to the release namespace (`-n`) is never rendered,
+  # so it cannot be deleted by `helm uninstall` either way.
   create: true
   name: immich
+
+# Add `helm.sh/resource-policy: keep` to the Namespace, PVCs and the
+# chart-created Secret, so `helm uninstall` never deletes photos, the
+# database, or the model cache.
+keepOnUninstall: true
 
 # ── Shared configuration shipped to every component via envFrom ────
 # Original ConfigMap keys (DB_HOSTNAME, REDIS_HOSTNAME, TZ).
@@ -123,9 +130,23 @@ redis:
       memory: 256Mi
 
 secrets:
-  # -- PostgreSQL password (change before deploying)
-  dbPassword: "changeme-please"
-  # -- PostgreSQL username used by Immich
+  # false (default): the Secret "immich-db-secret" already exists (created
+  #   once from examples/secrets.example.yaml, kubectl apply'd out of band)
+  #   and the chart never renders it, so a `helm upgrade` can never
+  #   overwrite a real password with an empty one.
+  # true: render the Secret from the values below (fresh installs, tests).
+  create: false
+  # -- PostgreSQL password. Required (fails the render) when secrets.create
+  #    is true. Never set a real value here - pass it with --set or -f at
+  #    install time, or better, leave secrets.create=false and manage the
+  #    Secret out of band.
+  dbPassword: ""
+  # -- PostgreSQL username used by Immich (not secret; fine to leave as-is)
   dbUsername: "immich"
-  # -- PostgreSQL database name used by Immich
+  # -- PostgreSQL database name used by Immich (not secret; fine to leave as-is)
   dbDatabaseName: "immich"
+
+tests:
+  # `helm test` smoke pod: immich-server /api/server/ping, then (if
+  # postgres.enabled) confirms the database schema/migrations exist. Read-only.
+  enabled: true
