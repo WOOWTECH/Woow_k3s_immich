@@ -2,8 +2,9 @@
 `helm test` smoke pod, read-only:
   1. immich-server /api/server/ping returns 200 (initContainer).
   2. If postgres.enabled: the database Immich actually uses has a schema -
-     at least one table in the public schema, and a "migrations" table
-     (TypeORM's tracking table, present once migrations have run).
+     at least one table in the public schema, and a "kysely_migrations" table
+     (Immich's Kysely migration-tracking table, present once migrations have
+     run; confirmed by inspecting a running v1.132.3 instance's schema).
 Uses curlimages/curl for the HTTP check and the chart's own postgres image
 (it already ships psql) for the DB check - no new production image.
 */ -}}
@@ -54,9 +55,9 @@ spec:
           echo "public tables: $n"
           [ "$n" -gt 0 ] || { echo "no tables in public schema - schema missing"; exit 1; }
           m=$(psql -tA -h "$host" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='migrations';")
-          [ "$m" -gt 0 ] || { echo "migrations table missing - Immich has not initialised the schema"; exit 1; }
-          echo "migrations table present"
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='kysely_migrations';")
+          [ "$m" -gt 0 ] || { echo "kysely_migrations table missing - Immich has not initialised the schema"; exit 1; }
+          echo "kysely_migrations table present"
           echo "SMOKE OK"
       env:
         - name: PGPASSWORD
