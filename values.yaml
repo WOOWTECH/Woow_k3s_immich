@@ -83,14 +83,23 @@ machineLearning:
       memory: 4Gi
 
 postgres:
+  # Which library postgres must preload for the vector extension, and the
+  # search_path that exposes it. These MUST match postgres.image.tag:
+  #   ghcr.io/immich-app/postgres:*-vectorchord*  -> vchord.so  / public,vchord
+  #   tensorchord/pgvecto-rs:*                    -> vectors.so / public,vectors
+  # immich-server tracks `:release`, which now requires VectorChord; leaving
+  # these on the retired pgvecto.rs values makes the server crash-loop with
+  # "No vector extension found. Available extensions: vchord, vector".
+  sharedPreloadLibraries: vchord.so
+  searchPath: public,vchord
   # In-cluster pgvecto.rs PostgreSQL StatefulSet.
   # Disable to point Immich at an external database (update
   # config.DB_HOSTNAME + secrets accordingly).
   enabled: true
 
   image:
-    repository: tensorchord/pgvecto-rs
-    tag: pg16-v0.3.0
+    repository: ghcr.io/immich-app/postgres
+    tag: "16-vectorchord0.4.3-pgvector0.8.0-pgvectors0.3.0"
     pullPolicy: IfNotPresent
 
   service:
