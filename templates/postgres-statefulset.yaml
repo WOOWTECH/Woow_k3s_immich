@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: immich-postgres
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "immich.ns" . }}
   labels:
     app: immich
     component: postgres

@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: immich-redis
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "immich.ns" . }}
   labels:
     app: immich
     component: redis
