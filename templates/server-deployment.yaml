@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: immich-server
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "immich.ns" . }}
   labels:
     app: immich
     component: server

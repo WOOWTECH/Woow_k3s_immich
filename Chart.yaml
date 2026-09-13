@@ -5,7 +5,7 @@ description: >-
   Deploys the immich-server, machine-learning worker, Redis, and a
   pgvecto.rs PostgreSQL StatefulSet.
 type: application
-version: 1.1.0
+version: 1.2.0
 appVersion: "release"
 kubeVersion: ">=1.24.0-0"
 keywords:
