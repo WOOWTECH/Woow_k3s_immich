@@ -25,11 +25,18 @@ spec:
         - name: postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
           imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          # The vector extension is a hard dependency of immich-server, and which
+          # library must be preloaded depends on the postgres image:
+          #   ghcr.io/immich-app/postgres:*-vectorchord*  -> vchord.so   (current)
+          #   tensorchord/pgvecto-rs:*                    -> vectors.so  (retired)
+          # immich-server's `:release` tag moved to VectorChord, so a fixed
+          # vectors.so crashes the server with "No vector extension found".
+          # Keep these two values in step with postgres.image.tag.
           args:
             - -c
-            - shared_preload_libraries=vectors.so
+            - shared_preload_libraries={{ .Values.postgres.sharedPreloadLibraries }}
             - -c
-            - search_path="$$user",public,vectors
+            - search_path="$$user",{{ .Values.postgres.searchPath }}
             - -c
             - logging_collector=on
             - -c
